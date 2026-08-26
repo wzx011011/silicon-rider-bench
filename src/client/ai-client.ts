@@ -397,6 +397,14 @@ export class AIClient {
     const isUnlimited = maxIterations === 0;
     const isDebugMode = process.env.DEBUG === 'true';
 
+    // 部分服务（如智谱 BigModel）拒绝仅含 system 消息的请求，
+    // 确保首轮至少有一条用户消息
+    if (!this.conversationHistory.some(msg => msg.role !== 'system')) {
+      this.addUserMessage(
+        'Start the simulation. Call tools as needed to complete the delivery tasks.'
+      );
+    }
+
     while (!this.simulator.shouldTerminate() && (isUnlimited || iteration < maxIterations)) {
       iteration++;
 
