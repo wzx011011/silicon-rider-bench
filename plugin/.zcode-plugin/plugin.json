@@ -1,0 +1,9 @@
+{
+  "name": "silicon-rider-bench",
+  "version": "0.1.0",
+  "description": "Benchmark all ZCode-connected AI models with Silicon Rider Bench (AI 外卖骑手 Agent 基准测试)",
+  "author": { "name": "wzx011011" },
+  "license": "MIT",
+  "commands": "commands",
+  "skills": "skills"
+}

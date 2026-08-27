@@ -129,6 +129,58 @@ npm run dev -- --level 1 --seed 42 --model openai/gpt-4 --output gpt4-result.md
 npm run dev -- --help
 ```
 
+### ZCode 模型批量测试
+
+自动读取 ZCode 客户端配置（`~/.zcode/v2/config.json`）中已接入的全部 AI 模型，
+逐个运行基准并生成横向对比报告。无需手动配置 `.env`——API Key 在运行时
+从 ZCode 配置读取，仅通过环境变量注入子进程，不落盘、不打印。
+
+```bash
+# 列出 ZCode 接入的全部模型（密钥脱敏）
+npm run zcode-bench -- --list
+
+# 批量冒烟测试全部可测模型（Level 0.1，单模型约 2~5 分钟）
+npm run zcode-bench -- --all --level 0.1 --seed 67890
+
+# 单模型正式基准（Level 1，耗时约 1 小时/模型）
+npm run zcode-bench -- --model builtin:bigmodel-coding-plan/GLM-5.3-Flash --level 1 --seed 67890
+
+# 单模型 + Web 可视化（浏览器打开 http://localhost:3000）
+npm run zcode-bench -- --model builtin:bigmodel-coding-plan/GLM-5.3-Flash --level 0.1 --mode web
+
+# 排除部分 provider
+npm run zcode-bench -- --all --exclude builtin:bigmodel
+```
+
+产物（均在仓库根目录）：
+
+| 文件 | 说明 |
+|------|------|
+| `report-zcode-<provider>-<model>-l<level>.md` | 单模型评测报告 |
+| `report-zcode-<provider>-<model>-l<level>.json` | 单模型结构化指标 |
+| `bench-logs/*.log` | 单模型完整运行日志 |
+| `zcode-bench-comparison.md` | 全部模型的横向对比表 |
+
+支持情况说明：
+
+- 智谱系 provider（`open.bigmodel.cn` / `api.z.ai`，anthropic 协议）自动映射到
+  OpenAI 兼容端点（已实测 `open.bigmodel.cn/api/coding/paas/v4`）；
+- `kind: openai` 的 provider 直接使用其 baseURL；
+- 未知 anthropic 端点或缺少 API Key 的模型会在 `--list` 中标出并自动跳过；
+- Level 2/3 需要`--list`中标记"多模态=是"的模型。
+
+#### ZCode 插件（`/srb:bench` 命令）
+
+仓库内置 ZCode 插件包（`plugin/` 目录），安装后可在 ZCode 中直接用
+`/srb:bench [级别] [模型]` 发起测试：
+
+1. ZCode 客户端 → 设置 → 插件管理 → 发现 → `+` 添加市场，
+   选择本地目录：本仓库的 `plugin/`；
+2. 安装 `silicon-rider-bench` 插件并启用；
+3. 首次使用时按提示把 `plugin/config.example.json` 复制为 `plugin/config.json`，
+   确认其中 `benchRepoPath` 指向本仓库绝对路径；
+4. 在任意会话输入 `/srb:bench 0.1` 即可。
+
 ### Web 可视化模式
 
 Silicon Rider Bench 支持基于浏览器的实时可视化界面，提供更直观的模拟过程展示。

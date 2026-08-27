@@ -460,6 +460,30 @@ cp .env.cost-optimized .env
 npm run dev -- --level 1 --no-viz
 ```
 
+## ZCode 模型批量测试
+
+除手动配置 `.env` 外，还可以直接测试 ZCode 客户端接入的全部模型
+（详见 README 的"ZCode 模型批量测试"章节）：
+
+```bash
+npm run zcode-bench -- --list          # 列出模型
+npm run zcode-bench -- --all           # 批量冒烟（默认 Level 0.1）
+```
+
+相关配置：
+
+| 环境变量 | 说明 | 默认值 |
+|----------|------|--------|
+| `ZCODE_CONFIG` | ZCode 配置文件路径 | `~/.zcode/v2/config.json` |
+
+说明：
+
+- 该模式下 `API_KEY` / `BASE_URL` / `MODEL_NAME` 从 ZCode 配置自动注入，
+  `.env` 中的同名变量会被注入值覆盖（环境变量优先于 dotenv）；
+- API Key 不写入任何仓库文件，`--list` 输出只显示"是否已配置"；
+- 智谱系 anthropic 端点会自动映射为 OpenAI 兼容端点
+  （`open.bigmodel.cn/api/anthropic` → `open.bigmodel.cn/api/coding/paas/v4`）。
+
 ## 参考资源
 
 - [OpenRouter 文档](https://openrouter.ai/docs)

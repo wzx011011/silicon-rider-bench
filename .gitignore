@@ -26,7 +26,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 report*.md
+report*.json
 debug*.md
+
+# ZCode batch test artifacts
+bench-logs/
+zcode-bench-comparison.md
 
 # Test output
 test-results/
+.zcode/

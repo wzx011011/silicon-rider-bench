@@ -1,0 +1,4 @@
+{
+  "_comment": "复制本文件为 config.json 并填入 Silicon Rider Bench 仓库的绝对路径（Windows 路径用正斜杠）",
+  "benchRepoPath": "D:/AI/silicon-rider-bench"
+}

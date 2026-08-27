@@ -149,6 +149,16 @@ async function generateAndSaveReport(
   fs.writeFileSync(outputPath, report, 'utf-8');
   console.log(`\n✓ 报告已保存到: ${outputPath}`);
 
+  // 保存结构化指标 JSON（供批量测试工具聚合对比）
+  const metricsJson = {
+    config: reportConfig,
+    metrics,
+    tokenUsage: tokenUsage.cumulative,
+  };
+  const metricsJsonPath = outputPath.replace(/\.md$/, '.json');
+  fs.writeFileSync(metricsJsonPath, JSON.stringify(metricsJson, null, 2), 'utf-8');
+  console.log(`✓ 指标 JSON 已保存到: ${metricsJsonPath}`);
+
   // 生成并保存详细报告
   console.log('正在生成详细报告...');
   const detailReport = ReportGenerator.generateDetailReport(
