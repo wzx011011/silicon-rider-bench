@@ -61,6 +61,8 @@ export interface AIClientConfig {
   repetitionPenalty?: number;   // Repetition penalty (frequency_penalty in OpenAI API)
   contextHistoryLimit?: number; // 限制传递给服务器的历史消息数量（不包含 system 消息），不设置或 0 表示不限制
   imageTransportMode?: ImageTransportMode; // 图片传输模式（V2 多模态使用）
+  apiTimeoutMs?: number;        // 单次 API 请求超时毫秒数（传给 OpenAI SDK，默认 120000）
+  maxRetries?: number;          // 网络类错误的自动重试次数（默认 3）
 }
 
 /**
@@ -131,6 +133,8 @@ export class AIClient {
     this.client = new OpenAI({
       apiKey: this.config.apiKey,
       baseURL: this.config.baseURL,
+      timeout: this.config.apiTimeoutMs,
+      maxRetries: this.config.maxRetries,
       defaultHeaders: {
         'HTTP-Referer': this.config.siteURL || '',
         'X-Title': this.config.appName || 'Silicon Rider Bench',
@@ -199,6 +203,15 @@ export class AIClient {
       ? parseFloat(process.env.REPETITION_PENALTY) 
       : undefined;
 
+    // API 请求超时（毫秒）与最大重试次数，直接传给 OpenAI SDK
+    const apiTimeoutFromEnv = process.env.API_TIMEOUT 
+      ? parseInt(process.env.API_TIMEOUT, 10) 
+      : undefined;
+    
+    const maxRetriesFromEnv = process.env.MAX_RETRIES 
+      ? parseInt(process.env.MAX_RETRIES, 10) 
+      : undefined;
+
     return {
       apiKey,
       modelName: config?.modelName || process.env.MODEL_NAME || 'anthropic/claude-3.5-sonnet',
@@ -211,6 +224,8 @@ export class AIClient {
       repetitionPenalty: config?.repetitionPenalty ?? repetitionPenaltyFromEnv ?? 1.05,
       contextHistoryLimit: config?.contextHistoryLimit || contextHistoryLimitFromEnv,
       imageTransportMode: config?.imageTransportMode || getImageTransportMode(),
+      apiTimeoutMs: apiTimeoutFromEnv ?? 120000,
+      maxRetries: maxRetriesFromEnv ?? 3,
     };
   }
 
@@ -423,13 +438,37 @@ export class AIClient {
           const systemMessages = this.conversationHistory.filter(msg => msg.role === 'system');
           const nonSystemMessages = this.conversationHistory.filter(msg => msg.role !== 'system');
           
-          // 只有当非 system 消息数量 > historyLimit 时才进行截取
-          if (nonSystemMessages.length > historyLimit) {
-            // 保留最近的 historyLimit 条非 system 消息
-            const recentMessages = nonSystemMessages.slice(-historyLimit);
-            // 合并 system 消息和最近的非 system 消息，并更新实际的历史记录
-            this.conversationHistory = [...systemMessages, ...recentMessages];
-            console.log(`[AI Client] History limit reached. Trimmed to ${historyLimit} non-system messages (removed ${nonSystemMessages.length - historyLimit} oldest messages)`);
+          // 部分服务（如智谱 BigModel）要求 messages 不能只包含
+          // system/assistant 消息，必须至少含一条 user 输入。
+          // 裁剪时固定保留最早的一条 user 消息，避免其被裁掉后违反此规则
+          let pinnedUserMessage: ChatMessage | undefined;
+          const trimmableMessages: ChatMessage[] = [];
+          for (const msg of nonSystemMessages) {
+            if (!pinnedUserMessage && msg.role === 'user') {
+              pinnedUserMessage = msg;
+              continue;
+            }
+            trimmableMessages.push(msg);
+          }
+          
+          // 只有当可裁剪消息数量 > historyLimit 时才进行截取
+          if (trimmableMessages.length > historyLimit) {
+            // 保留最近的 historyLimit 条可裁剪消息
+            let recentMessages = trimmableMessages.slice(-historyLimit);
+            // 裁剪可能从工具调用块中间切开，导致开头出现没有所属
+            // assistant tool_calls 的孤儿 tool 消息，部分服务
+            // （如智谱 BigModel）会拒绝这种请求（400 "messages 参数非法"）
+            while (recentMessages.length > 0 && recentMessages[0].role === 'tool') {
+              console.log(`[AI Client] Dropping orphan tool message at trimmed history start`);
+              recentMessages = recentMessages.slice(1);
+            }
+            // 合并 system、固定 user 与最近消息，并更新实际的历史记录
+            this.conversationHistory = [
+              ...systemMessages,
+              ...(pinnedUserMessage ? [pinnedUserMessage] : []),
+              ...recentMessages,
+            ];
+            console.log(`[AI Client] History limit reached. Trimmed to ${historyLimit} non-system messages (removed ${trimmableMessages.length - historyLimit} oldest messages)`);
           }
         }
         
@@ -509,6 +548,8 @@ export class AIClient {
               apiError.message?.includes('Unexpected end of JSON') ||
               apiError.message?.includes('ECONNRESET') ||
               apiError.message?.includes('ETIMEDOUT') ||
+              apiError.message?.includes('Request timed out') ||
+              apiError.message?.includes('Connection error') ||
               apiError.code === 'ECONNRESET' ||
               apiError.code === 'ETIMEDOUT';
             
